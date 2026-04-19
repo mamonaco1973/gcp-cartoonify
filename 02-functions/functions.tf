@@ -2,7 +2,7 @@
 # Gateway Service Account
 # ================================================================================
 # The API Gateway uses this SA to generate OIDC tokens for Cloud Run backend
-# auth. HTTP functions are private — only the gateway SA can invoke them.
+# auth. The HTTP function is private — only the gateway SA can invoke it.
 # ================================================================================
 
 resource "google_service_account" "gateway_sa" {
@@ -11,46 +11,23 @@ resource "google_service_account" "gateway_sa" {
 }
 
 # ================================================================================
-# HTTP Cloud Functions (5 API handlers)
+# HTTP Cloud Function — single consolidated API handler
+# ================================================================================
+# All 5 routes (upload-url, generate, result, history, delete) are handled by
+# one function with internal routing, matching the gcp-identity-app pattern.
 # ================================================================================
 
-resource "google_cloudfunctions2_function" "upload_url" {
-  name     = "cartoonify-upload-url"
+resource "google_cloudfunctions2_function" "api" {
+  name     = "cartoonify-api"
   location = "us-central1"
 
   build_config {
     runtime     = "python311"
-    entry_point = "upload_url"
+    entry_point = "cartoonify_api"
     source {
       storage_source {
         bucket = google_storage_bucket.source.name
-        object = google_storage_bucket_object.upload_url_obj.name
-      }
-    }
-  }
-
-  service_config {
-    service_account_email = data.google_service_account.api_sa.email
-    timeout_seconds       = 60
-    environment_variables = {
-      GOOGLE_CLOUD_PROJECT = local.credentials.project_id
-      MEDIA_BUCKET_NAME    = var.media_bucket_name
-      CORS_ALLOW_ORIGIN    = "*"
-    }
-  }
-}
-
-resource "google_cloudfunctions2_function" "submit" {
-  name     = "cartoonify-submit"
-  location = "us-central1"
-
-  build_config {
-    runtime     = "python311"
-    entry_point = "submit"
-    source {
-      storage_source {
-        bucket = google_storage_bucket.source.name
-        object = google_storage_bucket_object.submit_obj.name
+        object = google_storage_bucket_object.api_obj.name
       }
     }
   }
@@ -62,84 +39,6 @@ resource "google_cloudfunctions2_function" "submit" {
       GOOGLE_CLOUD_PROJECT = local.credentials.project_id
       MEDIA_BUCKET_NAME    = var.media_bucket_name
       JOBS_TOPIC           = "cartoonify-jobs"
-      CORS_ALLOW_ORIGIN    = "*"
-    }
-  }
-}
-
-resource "google_cloudfunctions2_function" "result" {
-  name     = "cartoonify-result"
-  location = "us-central1"
-
-  build_config {
-    runtime     = "python311"
-    entry_point = "result"
-    source {
-      storage_source {
-        bucket = google_storage_bucket.source.name
-        object = google_storage_bucket_object.result_obj.name
-      }
-    }
-  }
-
-  service_config {
-    service_account_email = data.google_service_account.api_sa.email
-    timeout_seconds       = 60
-    environment_variables = {
-      GOOGLE_CLOUD_PROJECT = local.credentials.project_id
-      MEDIA_BUCKET_NAME    = var.media_bucket_name
-      CORS_ALLOW_ORIGIN    = "*"
-    }
-  }
-}
-
-resource "google_cloudfunctions2_function" "history" {
-  name     = "cartoonify-history"
-  location = "us-central1"
-
-  build_config {
-    runtime     = "python311"
-    entry_point = "history"
-    source {
-      storage_source {
-        bucket = google_storage_bucket.source.name
-        object = google_storage_bucket_object.history_obj.name
-      }
-    }
-  }
-
-  service_config {
-    service_account_email = data.google_service_account.api_sa.email
-    timeout_seconds       = 60
-    environment_variables = {
-      GOOGLE_CLOUD_PROJECT = local.credentials.project_id
-      MEDIA_BUCKET_NAME    = var.media_bucket_name
-      CORS_ALLOW_ORIGIN    = "*"
-    }
-  }
-}
-
-resource "google_cloudfunctions2_function" "delete" {
-  name     = "cartoonify-delete"
-  location = "us-central1"
-
-  build_config {
-    runtime     = "python311"
-    entry_point = "delete_job"
-    source {
-      storage_source {
-        bucket = google_storage_bucket.source.name
-        object = google_storage_bucket_object.delete_obj.name
-      }
-    }
-  }
-
-  service_config {
-    service_account_email = data.google_service_account.api_sa.email
-    timeout_seconds       = 60
-    environment_variables = {
-      GOOGLE_CLOUD_PROJECT = local.credentials.project_id
-      MEDIA_BUCKET_NAME    = var.media_bucket_name
       CORS_ALLOW_ORIGIN    = "*"
     }
   }
@@ -185,40 +84,12 @@ resource "google_cloudfunctions2_function" "worker" {
 }
 
 # ================================================================================
-# Cloud Run IAM: gateway SA can invoke each private HTTP function
+# Cloud Run IAM: gateway SA can invoke the private API function
 # ================================================================================
 
-resource "google_cloud_run_service_iam_member" "gateway_upload_url" {
-  location = google_cloudfunctions2_function.upload_url.location
-  service  = google_cloudfunctions2_function.upload_url.name
-  role     = "roles/run.invoker"
-  member   = "serviceAccount:${google_service_account.gateway_sa.email}"
-}
-
-resource "google_cloud_run_service_iam_member" "gateway_submit" {
-  location = google_cloudfunctions2_function.submit.location
-  service  = google_cloudfunctions2_function.submit.name
-  role     = "roles/run.invoker"
-  member   = "serviceAccount:${google_service_account.gateway_sa.email}"
-}
-
-resource "google_cloud_run_service_iam_member" "gateway_result" {
-  location = google_cloudfunctions2_function.result.location
-  service  = google_cloudfunctions2_function.result.name
-  role     = "roles/run.invoker"
-  member   = "serviceAccount:${google_service_account.gateway_sa.email}"
-}
-
-resource "google_cloud_run_service_iam_member" "gateway_history" {
-  location = google_cloudfunctions2_function.history.location
-  service  = google_cloudfunctions2_function.history.name
-  role     = "roles/run.invoker"
-  member   = "serviceAccount:${google_service_account.gateway_sa.email}"
-}
-
-resource "google_cloud_run_service_iam_member" "gateway_delete" {
-  location = google_cloudfunctions2_function.delete.location
-  service  = google_cloudfunctions2_function.delete.name
+resource "google_cloud_run_service_iam_member" "gateway_api" {
+  location = google_cloudfunctions2_function.api.location
+  service  = google_cloudfunctions2_function.api.name
   role     = "roles/run.invoker"
   member   = "serviceAccount:${google_service_account.gateway_sa.email}"
 }
@@ -226,8 +97,8 @@ resource "google_cloud_run_service_iam_member" "gateway_delete" {
 # ================================================================================
 # API Gateway
 # ================================================================================
-# Routes each path to its dedicated Cloud Function.
-# Firebase JWT auth is validated at the gateway level before any function runs.
+# All paths route to the single cartoonify_api function.
+# Firebase JWT auth is validated at the gateway level before the function runs.
 # ================================================================================
 
 resource "google_api_gateway_api" "cartoonify" {
@@ -252,12 +123,8 @@ resource "google_api_gateway_api_config" "cartoonify" {
     document {
       path = "openapi.yaml"
       contents = base64encode(templatefile("${path.module}/openapi.yaml.tpl", {
-        project_id     = local.credentials.project_id
-        upload_url_uri = google_cloudfunctions2_function.upload_url.service_config[0].uri
-        submit_uri     = google_cloudfunctions2_function.submit.service_config[0].uri
-        result_uri     = google_cloudfunctions2_function.result.service_config[0].uri
-        history_uri    = google_cloudfunctions2_function.history.service_config[0].uri
-        delete_uri     = google_cloudfunctions2_function.delete.service_config[0].uri
+        project_id   = local.credentials.project_id
+        function_uri = google_cloudfunctions2_function.api.service_config[0].uri
       }))
     }
   }
@@ -267,11 +134,7 @@ resource "google_api_gateway_api_config" "cartoonify" {
   }
 
   depends_on = [
-    google_cloud_run_service_iam_member.gateway_upload_url,
-    google_cloud_run_service_iam_member.gateway_submit,
-    google_cloud_run_service_iam_member.gateway_result,
-    google_cloud_run_service_iam_member.gateway_history,
-    google_cloud_run_service_iam_member.gateway_delete,
+    google_cloud_run_service_iam_member.gateway_api,
   ]
 }
 

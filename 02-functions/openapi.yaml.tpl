@@ -8,17 +8,17 @@ schemes:
 produces:
   - application/json
 
-# Each path has its own x-google-backend pointing to a dedicated function.
+# Single global backend routes all paths to the cartoonify_api function.
 # OPTIONS operations have no security requirement — CORS preflight passes freely.
+x-google-backend:
+  address: ${function_uri}
+  jwt_audience: ${function_uri}
+  protocol: h2
 
 paths:
   /upload-url:
     options:
       operationId: corsUploadUrl
-      x-google-backend:
-        address: ${upload_url_uri}
-        jwt_audience: ${upload_url_uri}
-        protocol: h2
       responses:
         "204":
           description: CORS preflight
@@ -26,10 +26,6 @@ paths:
       operationId: uploadUrl
       security:
         - firebase: []
-      x-google-backend:
-        address: ${upload_url_uri}
-        jwt_audience: ${upload_url_uri}
-        protocol: h2
       parameters:
         - in: body
           name: body
@@ -42,10 +38,6 @@ paths:
   /generate:
     options:
       operationId: corsGenerate
-      x-google-backend:
-        address: ${submit_uri}
-        jwt_audience: ${submit_uri}
-        protocol: h2
       responses:
         "204":
           description: CORS preflight
@@ -53,10 +45,6 @@ paths:
       operationId: generate
       security:
         - firebase: []
-      x-google-backend:
-        address: ${submit_uri}
-        jwt_audience: ${submit_uri}
-        protocol: h2
       parameters:
         - in: body
           name: body
@@ -69,10 +57,6 @@ paths:
   /result/{job_id}:
     options:
       operationId: corsResult
-      x-google-backend:
-        address: ${result_uri}
-        jwt_audience: ${result_uri}
-        protocol: h2
       parameters:
         - in: path
           name: job_id
@@ -85,10 +69,6 @@ paths:
       operationId: getResult
       security:
         - firebase: []
-      x-google-backend:
-        address: ${result_uri}
-        jwt_audience: ${result_uri}
-        protocol: h2
       parameters:
         - in: path
           name: job_id
@@ -101,10 +81,6 @@ paths:
   /history:
     options:
       operationId: corsHistory
-      x-google-backend:
-        address: ${history_uri}
-        jwt_audience: ${history_uri}
-        protocol: h2
       responses:
         "204":
           description: CORS preflight
@@ -112,10 +88,6 @@ paths:
       operationId: getHistory
       security:
         - firebase: []
-      x-google-backend:
-        address: ${history_uri}
-        jwt_audience: ${history_uri}
-        protocol: h2
       responses:
         "200":
           description: Newest 50 jobs for the authenticated user
@@ -123,10 +95,6 @@ paths:
   /history/{job_id}:
     options:
       operationId: corsHistoryId
-      x-google-backend:
-        address: ${delete_uri}
-        jwt_audience: ${delete_uri}
-        protocol: h2
       parameters:
         - in: path
           name: job_id
@@ -139,10 +107,6 @@ paths:
       operationId: deleteJob
       security:
         - firebase: []
-      x-google-backend:
-        address: ${delete_uri}
-        jwt_audience: ${delete_uri}
-        protocol: h2
       parameters:
         - in: path
           name: job_id

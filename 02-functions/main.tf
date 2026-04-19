@@ -82,38 +82,14 @@ resource "google_storage_bucket" "source" {
 }
 
 # ================================================================================
-# Archive each function directory into a zip
+# Archive function source directories into zips.
 # MD5-tagged names cause Terraform to re-upload only when code changes.
 # ================================================================================
 
-data "archive_file" "upload_url_zip" {
+data "archive_file" "api_zip" {
   type        = "zip"
-  source_dir  = "${path.module}/code/upload_url"
-  output_path = "${path.module}/code/upload_url.zip"
-}
-
-data "archive_file" "submit_zip" {
-  type        = "zip"
-  source_dir  = "${path.module}/code/submit"
-  output_path = "${path.module}/code/submit.zip"
-}
-
-data "archive_file" "result_zip" {
-  type        = "zip"
-  source_dir  = "${path.module}/code/result"
-  output_path = "${path.module}/code/result.zip"
-}
-
-data "archive_file" "history_zip" {
-  type        = "zip"
-  source_dir  = "${path.module}/code/history"
-  output_path = "${path.module}/code/history.zip"
-}
-
-data "archive_file" "delete_zip" {
-  type        = "zip"
-  source_dir  = "${path.module}/code/delete"
-  output_path = "${path.module}/code/delete.zip"
+  source_dir  = "${path.module}/code/api"
+  output_path = "${path.module}/code/api.zip"
 }
 
 data "archive_file" "worker_zip" {
@@ -126,34 +102,10 @@ data "archive_file" "worker_zip" {
 # Upload archives to source bucket
 # ================================================================================
 
-resource "google_storage_bucket_object" "upload_url_obj" {
-  name   = "upload_url-${data.archive_file.upload_url_zip.output_md5}.zip"
+resource "google_storage_bucket_object" "api_obj" {
+  name   = "api-${data.archive_file.api_zip.output_md5}.zip"
   bucket = google_storage_bucket.source.name
-  source = data.archive_file.upload_url_zip.output_path
-}
-
-resource "google_storage_bucket_object" "submit_obj" {
-  name   = "submit-${data.archive_file.submit_zip.output_md5}.zip"
-  bucket = google_storage_bucket.source.name
-  source = data.archive_file.submit_zip.output_path
-}
-
-resource "google_storage_bucket_object" "result_obj" {
-  name   = "result-${data.archive_file.result_zip.output_md5}.zip"
-  bucket = google_storage_bucket.source.name
-  source = data.archive_file.result_zip.output_path
-}
-
-resource "google_storage_bucket_object" "history_obj" {
-  name   = "history-${data.archive_file.history_zip.output_md5}.zip"
-  bucket = google_storage_bucket.source.name
-  source = data.archive_file.history_zip.output_path
-}
-
-resource "google_storage_bucket_object" "delete_obj" {
-  name   = "delete-${data.archive_file.delete_zip.output_md5}.zip"
-  bucket = google_storage_bucket.source.name
-  source = data.archive_file.delete_zip.output_path
+  source = data.archive_file.api_zip.output_path
 }
 
 resource "google_storage_bucket_object" "worker_obj" {
