@@ -53,22 +53,31 @@ gcloud firestore databases create \
   || echo "NOTE: Firestore database already exists."
 
 echo "NOTE: Creating Firestore composite indexes (idempotent)..."
+
+echo "DEBUG: Listing existing composite indexes before create..."
+gcloud firestore indexes composite list --project="${project_id}"
+
 # history: owner == uid ORDER BY created_at DESC
+echo "DEBUG: Creating history index (owner ASC, created_at DESC)..."
 gcloud firestore indexes composite create \
   --project="${project_id}" \
   --collection-group=cartoonify_jobs \
   --field-config="field-path=owner,order=ascending" \
   --field-config="field-path=created_at,order=descending" \
-  --quiet 2>/dev/null \
-  || echo "NOTE: history index already exists."
+  && echo "DEBUG: history index create command succeeded." \
+  || echo "DEBUG: history index create command failed or already exists (exit $?)."
 
 # quota: owner == uid AND created_at >= today_start
+echo "DEBUG: Creating quota index (owner ASC, created_at ASC)..."
 gcloud firestore indexes composite create \
   --project="${project_id}" \
   --collection-group=cartoonify_jobs \
   --field-config="field-path=owner,order=ascending" \
   --field-config="field-path=created_at,order=ascending" \
-  --quiet 2>/dev/null \
-  || echo "NOTE: quota index already exists."
+  && echo "DEBUG: quota index create command succeeded." \
+  || echo "DEBUG: quota index create command failed or already exists (exit $?)."
+
+echo "DEBUG: Listing composite indexes after create..."
+gcloud firestore indexes composite list --project="${project_id}"
 
 echo "NOTE: API setup complete."
