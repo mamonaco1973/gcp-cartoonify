@@ -31,6 +31,8 @@ cd 01-backend
 terraform init -input=false
 terraform apply -auto-approve
 
+exit 0
+
 MEDIA_BUCKET=$(terraform output -raw media_bucket_name)
 FIREBASE_API_KEY=$(terraform output -raw firebase_api_key)
 cd ..
