@@ -55,6 +55,7 @@ gcloud firestore databases create \
 echo "NOTE: Creating Firestore composite indexes (idempotent)..."
 
 # history: owner == uid ORDER BY created_at DESC
+echo "NOTE: Creating history index (owner ASC, created_at DESC)..."
 if gcloud firestore indexes composite create \
     --project="${project_id}" \
     --collection-group=cartoonify_jobs \
@@ -67,6 +68,7 @@ else
 fi
 
 # quota: owner == uid AND created_at >= today_start
+echo "NOTE: Creating quota index (owner ASC, created_at ASC)..."
 if gcloud firestore indexes composite create \
     --project="${project_id}" \
     --collection-group=cartoonify_jobs \
