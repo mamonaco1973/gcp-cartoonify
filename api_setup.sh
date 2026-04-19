@@ -52,4 +52,23 @@ gcloud firestore databases create \
   --database="(default)" 2>/dev/null \
   || echo "NOTE: Firestore database already exists."
 
+echo "NOTE: Creating Firestore composite indexes (idempotent)..."
+# history: owner == uid ORDER BY created_at DESC
+gcloud firestore indexes composite create \
+  --project="${project_id}" \
+  --collection-group=cartoonify_jobs \
+  --field-config="field-path=owner,order=ascending" \
+  --field-config="field-path=created_at,order=descending" \
+  --quiet 2>/dev/null \
+  || echo "NOTE: history index already exists."
+
+# quota: owner == uid AND created_at >= today_start
+gcloud firestore indexes composite create \
+  --project="${project_id}" \
+  --collection-group=cartoonify_jobs \
+  --field-config="field-path=owner,order=ascending" \
+  --field-config="field-path=created_at,order=ascending" \
+  --quiet 2>/dev/null \
+  || echo "NOTE: quota index already exists."
+
 echo "NOTE: API setup complete."

@@ -29,7 +29,7 @@ import time
 import vertexai
 from vertexai.preview.vision_models import ImageGenerationModel
 from vertexai.preview.vision_models import Image as VertexImage
-from vertexai.preview.vision_models import RawReferenceImage
+from vertexai.preview.vision_models import SubjectReferenceImage
 from google.cloud import firestore, storage
 from PIL import Image, ImageOps
 
@@ -103,18 +103,19 @@ def _invoke_imagen(prepared_bytes: bytes, style_id: str, prompt_extra: str) -> b
         prompt = f"{prompt}, {prompt_extra}"
 
     vertexai.init(project=PROJECT_ID, location="us-central1")
-    model  = ImageGenerationModel.from_pretrained(IMAGEN_MODEL_ID)
-    # Imagen 3 mask-free editing requires the source as a RawReferenceImage
-    # rather than base_image — it maps to context_image in the REST API.
-    context = RawReferenceImage(
+    model = ImageGenerationModel.from_pretrained(IMAGEN_MODEL_ID)
+    # REFERENCE_TYPE_SUBJECT preserves the person's likeness through the
+    # style transformation, vs REFERENCE_TYPE_RAW which is generic.
+    subject = SubjectReferenceImage(
         image=VertexImage(image_bytes=prepared_bytes),
         reference_id=0,
+        subject_type="person",
     )
 
     logger.info("Invoking Imagen model=%s style=%s", IMAGEN_MODEL_ID, style_id)
     result = model.edit_image(
         prompt=prompt,
-        reference_images=[context],
+        reference_images=[subject],
         number_of_images=1,
     )
 

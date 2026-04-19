@@ -9,4 +9,4 @@
 #   imagen-3.0-capability-001   — full quality, supports edit_image
 # ==============================================================================
 
-export IMAGEN_MODEL_ID="imagen-3.0-capability-001"
+export IMAGEN_MODEL_ID="imagen-3.0-capability-002"
