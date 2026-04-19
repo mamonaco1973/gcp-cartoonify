@@ -1,9 +1,13 @@
+# ================================================================================
+# GCS: Public static web hosting bucket
+# ================================================================================
+
 resource "random_id" "suffix" {
   byte_length = 4
 }
 
 resource "google_storage_bucket" "webapp" {
-  name                        = "notes-web-${random_id.suffix.hex}"
+  name                        = "cartoonify-web-${random_id.suffix.hex}"
   location                    = "US"
   force_destroy               = true
   uniform_bucket_level_access = false

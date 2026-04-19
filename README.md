@@ -1,195 +1,92 @@
-# GCP Serverless Authenticated Notes API
+# GCP Cartoonify
 
-This project delivers a fully automated **serverless, authenticated CRUD API**
-on Google Cloud Platform, built using **Cloud Functions (2nd Gen)**,
-**Cloud Firestore**, **Cloud API Gateway**, and **Identity Platform**.
+This project delivers a fully automated **serverless image-to-cartoon service**
+on Google Cloud Platform, ported from the AWS Bedrock-based aws-cartoonify
+project. Users sign in, upload a photo, choose a cartoon style, and an
+asynchronous Pub/Sub-driven worker calls **Vertex AI Imagen** to generate the
+cartoon. Results are stored in GCS for 7 days and accessed via short-lived
+signed URLs.
 
-It uses **Terraform** and **Python** to provision and deploy a **stateless,
-identity-aware REST backend** that exposes HTTP endpoints for managing notes —
-all without running or managing any virtual machines or containers.
-
-A lightweight **HTML web frontend** (served from Cloud Storage) handles user
-sign-in and interacts directly with the API, allowing users to create, view,
-update, and delete their own notes from a browser.
-
-![webapp](webapp.png)
-
-This design extends a basic serverless CRUD architecture with a full
-authentication layer. Cloud API Gateway validates Firebase ID tokens before
-any request reaches the Cloud Function, and per-user data isolation is enforced
-in Firestore using the authenticated user's Firebase UID as the owner key.
-
-Key capabilities demonstrated:
-
-1. **Identity Platform Authentication** – Email/password sign-in backed by
-   Google's Identity Platform (Firebase Auth). Each user gets a unique UID
-   used to scope their data.
-2. **JWT Validation at the Gateway** – Cloud API Gateway validates Firebase ID
-   tokens against Identity Platform's JWKS before forwarding requests to the
-   backend. The function never sees an unverified token.
-3. **Per-User Data Isolation** – The Cloud Function extracts the Firebase UID
-   from the verified JWT claims and uses it as the Firestore partition key.
-   Users can only read and write their own notes.
-4. **Private Cloud Function** – The Cloud Function is not publicly accessible.
-   Only the API Gateway's service account holds `roles/run.invoker`.
-5. **Serverless CRUD API** – A single Cloud Function routes all five REST
-   operations internally by method and path — no separate routing layer needed.
-6. **Managed NoSQL Storage** – Firestore (Native mode) provides low-latency,
-   fully managed document persistence with no capacity planning required.
-7. **Infrastructure as Code** – Terraform provisions all resources including
-   Identity Platform configuration, API Gateway, API keys, IAM bindings, and
-   Cloud Storage — in a repeatable, auditable way.
+Built with **Cloud Functions 2nd Gen**, **Pub/Sub**, **Firestore**, **Cloud API
+Gateway**, **Identity Platform**, **Vertex AI**, and **Terraform**.
 
 ---
 
 ## Architecture
 
-![diagram](gcp-identity-app.png)
-
 ```
 Browser (SPA on GCS)
-     │
-     ├── Loads config.json  (apiKey, authDomain, projectId, apiBaseUrl)
-     ├── Signs in via Firebase JS SDK  (email / password)
-     │   └── Returns Firebase ID token (JWT, 1-hour TTL, auto-refreshes)
-     │
-     └── API calls:  Authorization: Bearer <id_token>
-          │
-          ▼
-     Cloud API Gateway
-     ├── Validates JWT signature against Identity Platform JWKS
-     ├── Rejects expired or invalid tokens (401)
-     ├── Encodes verified claims → X-Apigateway-Api-Userinfo header
-     └── Forwards to Cloud Run using gateway service account (OIDC)
-          │
-          ▼
-     Cloud Function: notes  (Python 3.11, 2nd Gen, private)
-     ├── Decodes X-Apigateway-Api-Userinfo → extracts sub (Firebase UID)
-     ├── Routes by request.method + request.path
-     └── Scopes all Firestore operations to owner = sub
-          │
-          ▼
-     Firestore (Native mode)
-     collection: notes  |  owner field: Firebase UID
+  └── Firebase JS SDK → Identity Platform (email/password) → ID token (JWT)
+
+Browser ──POST /upload-url──→ API Gateway (JWT) → upload_url fn → V4 signed PUT URL
+Browser ──PUT (direct)─────→ GCS media bucket   (originals/<owner>/<job_id>.<ext>)
+
+Browser ──POST /generate───→ API Gateway (JWT) → submit fn
+                                → Firestore (status=submitted)
+                                → Pub/Sub  cartoonify-jobs
+                                       ↓ Eventarc trigger
+                             cartoonify-worker fn (Cloud Function)
+                             • Pillow: EXIF strip, 1024×1024 crop/resize
+                             • Vertex AI Imagen imagegeneration@006 edit_image
+                             • GCS put  cartoons/<owner>/<job_id>.png
+                             • Firestore (status=complete)
+
+Browser ──GET /result/{id}──→ result fn   → job status + signed GET URLs
+Browser ──GET /history──────→ history fn  → newest 50 jobs for owner
+Browser ──DELETE /history/{id}→ delete fn → removes GCS objects + Firestore doc
 ```
 
 ---
 
 ## API Endpoints
 
-All endpoints require `Authorization: Bearer <firebase_id_token>`.
-OPTIONS requests (CORS preflight) are passed through without authentication.
+All endpoints (except OPTIONS) require `Authorization: Bearer <firebase_id_token>`.
 
-The base URL after deployment is the Cloud API Gateway URL:
-```
-https://{gateway-id}-{hash}-uc.a.run.app
-```
-
-### Endpoint Summary
-
-| Method | Path | Purpose | Auth |
-|--------|------|---------|------|
-| POST | `/notes` | Create a new note | Required |
-| GET | `/notes` | List caller's notes | Required |
-| GET | `/notes/{id}` | Get a single note | Required |
-| PUT | `/notes/{id}` | Update a note | Required |
-| DELETE | `/notes/{id}` | Delete a note | Required |
-
-Notes are scoped to the authenticated user — a user cannot read or modify
-another user's notes.
+| Method | Path | Purpose |
+|--------|------|---------|
+| POST | `/upload-url` | Get a V4 signed PUT URL to upload an image to GCS |
+| POST | `/generate` | Submit a cartoonify job (after upload completes) |
+| GET | `/result/{job_id}` | Poll job status + signed GET URLs for original/cartoon |
+| GET | `/history` | Newest 50 jobs for the authenticated user |
+| DELETE | `/history/{job_id}` | Delete a job and its GCS objects |
 
 ---
 
-### POST /notes
+## Cartoon Styles
 
-Creates a new note owned by the authenticated user.
-
-**Request Body (JSON):**
-```json
-{
-  "title": "My Note",
-  "note":  "Note body"
-}
-```
-
-**Example Request:**
-```bash
-curl -s -X POST "${GATEWAY}/notes" \
-  -H "Authorization: Bearer ${TOKEN}" \
-  -H "Content-Type: application/json" \
-  -d '{"title":"My Note","note":"Note body"}'
-```
-
-**Response (201):**
-```json
-{
-  "id":    "2f2d0c5a-9f5f-4d7d-9e2c-1c8a5b8e3c21",
-  "title": "My Note",
-  "note":  "Note body"
-}
-```
+| Style ID | Description |
+|----------|-------------|
+| `pixar_3d` | Pixar 3D animated portrait |
+| `simpsons` | The Simpsons flat cel-shaded style |
+| `anime` | Japanese anime portrait |
+| `comic_book` | Marvel comic book illustration |
+| `watercolor` | Fine art watercolor portrait |
+| `pencil_sketch` | Detailed graphite sketch |
 
 ---
 
-### GET /notes
+## Submit Flow (Browser)
 
-Lists all notes belonging to the authenticated user.
+```javascript
+// 1. Get a V4 signed PUT URL
+const presign = await api('/upload-url', 'POST', { content_type: 'image/jpeg' });
 
-**Example Request:**
-```bash
-curl -s "${GATEWAY}/notes" -H "Authorization: Bearer ${TOKEN}"
-```
+// 2. Upload directly to GCS
+await fetch(presign.upload_url, {
+  method: 'PUT',
+  headers: { 'Content-Type': 'image/jpeg' },
+  body: file,
+});
 
-**Response (200):**
-```json
-{
-  "items": [
-    {
-      "owner":      "firebase-uid-abc123",
-      "id":         "2f2d0c5a-9f5f-4d7d-9e2c-1c8a5b8e3c21",
-      "title":      "My Note",
-      "note":       "Note body",
-      "created_at": "2026-01-19T14:12:09.123456+00:00",
-      "updated_at": "2026-01-19T14:12:09.123456+00:00"
-    }
-  ]
-}
-```
+// 3. Submit the job
+const sub = await api('/generate', 'POST', {
+  job_id: presign.job_id,
+  key:    presign.key,
+  style:  'pixar_3d',
+});
 
----
-
-### GET /notes/{id}
-
-Retrieves a single note. Returns 404 if the note does not exist or belongs
-to a different user.
-
-```bash
-curl -s "${GATEWAY}/notes/{id}" -H "Authorization: Bearer ${TOKEN}"
-```
-
----
-
-### PUT /notes/{id}
-
-Updates an existing note. Returns 404 if the note does not exist or belongs
-to a different user.
-
-```bash
-curl -s -X PUT "${GATEWAY}/notes/{id}" \
-  -H "Authorization: Bearer ${TOKEN}" \
-  -H "Content-Type: application/json" \
-  -d '{"title":"Updated","note":"New body"}'
-```
-
----
-
-### DELETE /notes/{id}
-
-Deletes a note. Returns 404 if the note does not exist or belongs to a
-different user.
-
-```bash
-curl -s -X DELETE "${GATEWAY}/notes/{id}" -H "Authorization: Bearer ${TOKEN}"
+// 4. Poll for result
+// GET /result/{sub.job_id} every 2s until status === 'complete'
 ```
 
 ---
@@ -197,14 +94,26 @@ curl -s -X DELETE "${GATEWAY}/notes/{id}" -H "Authorization: Bearer ${TOKEN}"
 ## Obtaining a Token (CLI)
 
 ```bash
-API_KEY=$(jq -r '.apiKey'    02-webapp/config.json)
-GATEWAY=$(jq -r '.apiBaseUrl' 02-webapp/config.json)
+API_KEY=$(jq -r '.apiKey'    03-webapp/config.json)
+GATEWAY=$(jq -r '.apiBaseUrl' 03-webapp/config.json)
 
 TOKEN=$(curl -sf -X POST \
   "https://identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key=${API_KEY}" \
   -H "Content-Type: application/json" \
   -d '{"email":"you@example.com","password":"yourpassword","returnSecureToken":true}' \
   | jq -r '.idToken')
+
+# Request an upload URL
+curl -s -X POST "${GATEWAY}/upload-url" \
+  -H "Authorization: Bearer ${TOKEN}" \
+  -H "Content-Type: application/json" \
+  -d '{"content_type":"image/jpeg"}'
+
+# Poll job status
+curl -s "${GATEWAY}/result/<job_id>" -H "Authorization: Bearer ${TOKEN}"
+
+# View history
+curl -s "${GATEWAY}/history" -H "Authorization: Bearer ${TOKEN}"
 ```
 
 ---
@@ -217,62 +126,31 @@ TOKEN=$(curl -sf -X POST \
 * [Install jq](https://stedolan.github.io/jq/download/)
 * A GCP service account JSON key file saved as `credentials.json` in the repo root
 
-The service account needs permissions to manage Cloud Functions, Firestore,
-Cloud Storage, Cloud Run, Cloud Build, IAM, Identity Platform, API Gateway,
-and API Keys.
+The service account needs permissions for: Cloud Functions, Firestore, Cloud
+Storage, Cloud Run, Cloud Build, IAM, Identity Platform, API Gateway, API Keys,
+Pub/Sub, and Vertex AI.
 
-## Download this Repository
+---
 
-```bash
-git clone https://github.com/mamonaco1973/gcp-identity-app.git
-cd gcp-identity-app
-```
+## Deploy
 
-## Build the Code
-
-Place your `credentials.json` in the repo root, then run [apply](apply.sh) to
-provision all infrastructure.
+Place `credentials.json` in the repo root, then run:
 
 ```bash
-~/gcp-identity-app$ ./apply.sh
-NOTE: Running environment validation...
-NOTE: Validating required commands...
-NOTE: gcloud found.
-NOTE: terraform found.
-NOTE: jq found.
-NOTE: credentials.json found.
-NOTE: Authenticating with GCP project: my-project-id
-NOTE: Enabling required GCP APIs...
-NOTE: Enabling Identity Platform email/password sign-in...
-NOTE: Identity Platform configured.
-NOTE: Ensuring Firestore database exists in native mode...
-NOTE: API setup complete.
-NOTE: Deploying backend infrastructure...
-
-Initializing the backend...
+./apply.sh
 ```
 
-`apply.sh` runs in two phases:
+`apply.sh` runs in three phases:
 
-1. **Backend** — deploys the Cloud Function, Identity Platform config, browser
-   API key, API Gateway (API + config + gateway), and supporting IAM.
-2. **Frontend** — generates `config.json` from Terraform outputs, copies
-   `index.html.tmpl` → `index.html`, deploys the public GCS bucket.
+1. **01-backend** — GCS media bucket, Pub/Sub topic + subscription + DLQ,
+   service accounts, IAM bindings, Identity Platform API key, Firestore
+   composite indexes.
+2. **02-functions** — 5 HTTP Cloud Functions + 1 Pub/Sub worker + API Gateway
+   (OpenAPI spec with per-path Firebase JWT auth).
+3. **03-webapp** — Public GCS web bucket; generates `config.json` from Terraform
+   outputs and deploys the SPA.
 
-### Build Results
-
-When the deployment completes, the following resources are created:
-
-- **Identity Platform** — email/password sign-in enabled; browser API key
-  scoped to `identitytoolkit.googleapis.com`
-- **Cloud API Gateway** — validates Firebase JWT tokens; forwards verified
-  requests to the Cloud Function using a dedicated service account
-- **Cloud Function (`notes`)** — private Python 3.11 function, accessible only
-  via the gateway service account
-- **Firestore collection (`notes`)** — documents keyed by UUID, scoped by
-  Firebase UID owner field
-- **Cloud Storage (webapp)** — public static site hosting `index.html` and
-  `config.json`
+---
 
 ## Teardown
 
@@ -280,4 +158,38 @@ When the deployment completes, the following resources are created:
 ./destroy.sh
 ```
 
-Destroys the frontend bucket first, then all backend infrastructure.
+Destroys in reverse order: webapp → functions → backend.
+
+---
+
+## Project Structure
+
+```
+gcp-cartoonify/
+├── 01-backend/
+│   ├── main.tf        Provider, service accounts, IAM bindings
+│   ├── gcs.tf         Private media bucket (CORS, 7-day lifecycle)
+│   ├── pubsub.tf      cartoonify-jobs topic + subscription + DLQ
+│   ├── identity.tf    Identity Platform browser API key
+│   └── firestore.tf   Composite indexes for history + quota queries
+├── 02-functions/
+│   ├── main.tf        Provider, source archives, GCS source bucket
+│   ├── functions.tf   6 Cloud Functions + Cloud Run IAM + API Gateway
+│   ├── openapi.yaml.tpl  Per-path Firebase JWT OpenAPI spec
+│   └── code/
+│       ├── upload_url/   POST /upload-url
+│       ├── submit/       POST /generate
+│       ├── result/       GET  /result/{job_id}
+│       ├── history/      GET  /history
+│       ├── delete/       DELETE /history/{job_id}
+│       └── worker/       Pub/Sub-triggered Vertex AI worker
+├── 03-webapp/
+│   ├── main.tf
+│   ├── public-bucket.tf
+│   └── index.html.tmpl  Cartoonify SPA (Firebase Auth)
+├── apply.sh
+├── destroy.sh
+├── api_setup.sh
+├── check_env.sh
+└── validate.sh
+```

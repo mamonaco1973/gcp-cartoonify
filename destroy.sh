@@ -1,17 +1,45 @@
 #!/usr/bin/env bash
+# ==============================================================================
+# destroy.sh — tear down in reverse phase order
+# ==============================================================================
+
 set -euo pipefail
 
-# ─── Destroy web application first (removes GCS objects) ─────────────────────
+# Authenticate so gcloud and Terraform have credentials
+gcloud auth activate-service-account \
+  "$(jq -r '.client_email' credentials.json)" \
+  --key-file=credentials.json
+export GOOGLE_APPLICATION_CREDENTIALS="$(pwd)/credentials.json"
 
+MEDIA_BUCKET=$(cd 01-backend && terraform output -raw media_bucket_name 2>/dev/null || echo "")
+
+# ==============================================================================
+# PHASE 3 — Web Application
+# ==============================================================================
 echo "NOTE: Destroying web application..."
-cd 02-webapp
-terraform destroy -auto-approve
+cd 03-webapp
+terraform destroy -auto-approve || true
 cd ..
 
-# ─── Destroy backend infrastructure ──────────────────────────────────────────
+# ==============================================================================
+# PHASE 2 — Cloud Functions + API Gateway
+# ==============================================================================
+echo "NOTE: Destroying Cloud Functions and API Gateway..."
+cd 02-functions
+terraform destroy -auto-approve \
+  -var="media_bucket_name=${MEDIA_BUCKET:-placeholder}" || true
+cd ..
 
-echo "NOTE: Destroying backend infrastructure..."
-cd 01-functions
+# ==============================================================================
+# PHASE 1 — Backend (empties media bucket first so GCS destroy succeeds)
+# ==============================================================================
+if [ -n "${MEDIA_BUCKET}" ]; then
+  echo "NOTE: Emptying media bucket ${MEDIA_BUCKET}..."
+  gcloud storage rm -r "gs://${MEDIA_BUCKET}/**" 2>/dev/null || true
+fi
+
+echo "NOTE: Destroying backend resources..."
+cd 01-backend
 terraform destroy -auto-approve
 cd ..
 

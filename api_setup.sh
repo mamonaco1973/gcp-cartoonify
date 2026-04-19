@@ -28,7 +28,11 @@ gcloud services enable \
   apigateway.googleapis.com \
   servicemanagement.googleapis.com \
   servicecontrol.googleapis.com \
-  apikeys.googleapis.com
+  apikeys.googleapis.com \
+  aiplatform.googleapis.com \
+  pubsub.googleapis.com \
+  iam.googleapis.com \
+  iamcredentials.googleapis.com
 
 echo "NOTE: Enabling Identity Platform email/password sign-in..."
 access_token=$(gcloud auth print-access-token)

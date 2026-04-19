@@ -1,28 +1,65 @@
 #!/usr/bin/env bash
+# ==============================================================================
+# apply.sh
+# ==============================================================================
+# Orchestrates a three-phase Terraform deployment:
+#   01-backend  : GCS media bucket, Pub/Sub, service accounts, IAM,
+#                 Identity Platform API key, Firestore indexes
+#   02-functions: 6 Cloud Functions (5 HTTP + 1 Pub/Sub worker) + API Gateway
+#   03-webapp   : Public GCS web bucket + cartoonify SPA
+#
+# Requires: gcloud, terraform, jq in PATH + credentials.json in repo root
+# ==============================================================================
+
 set -euo pipefail
 
-echo "NOTE: Running environment validation..."
+# ------------------------------------------------------------------------------
+# Phase 0: Environment validation + API enablement
+# ------------------------------------------------------------------------------
 ./check_env.sh
 
-# ─── Phase 1: Backend (Cloud Function + Identity Platform + API Gateway) ─────
+project_id=$(jq -r '.project_id' credentials.json)
 
-echo "NOTE: Deploying backend infrastructure..."
-cd 01-functions
+# ==============================================================================
+# PHASE 1 — Backend (GCS, Pub/Sub, IAM, Identity Platform, Firestore)
+# ==============================================================================
+echo "NOTE: Phase 1 — provisioning backend resources..."
+
+cd 01-backend
 terraform init -input=false
 terraform apply -auto-approve
 
-GATEWAY_URL=$(terraform output -raw gateway_url)
+MEDIA_BUCKET=$(terraform output -raw media_bucket_name)
 FIREBASE_API_KEY=$(terraform output -raw firebase_api_key)
 cd ..
 
-project_id=$(jq -r '.project_id' credentials.json)
-echo "NOTE: Gateway URL   = ${GATEWAY_URL}"
-echo "NOTE: API key ready."
+echo "NOTE: media_bucket     = ${MEDIA_BUCKET}"
+echo "NOTE: firebase_api_key ready"
 
-# ─── Generate webapp config ──────────────────────────────────────────────────
+# ==============================================================================
+# PHASE 2 — Cloud Functions + API Gateway
+# ==============================================================================
+echo "NOTE: Phase 2 — deploying Cloud Functions and API Gateway..."
 
-echo "NOTE: Generating 02-webapp/config.json..."
-cat > 02-webapp/config.json << EOF
+cd 02-functions
+terraform init -input=false
+terraform apply -auto-approve \
+  -var="media_bucket_name=${MEDIA_BUCKET}"
+
+GATEWAY_URL=$(terraform output -raw gateway_url)
+cd ..
+
+echo "NOTE: gateway_url      = ${GATEWAY_URL}"
+
+# ==============================================================================
+# PHASE 3 — Web Application
+# ==============================================================================
+echo "NOTE: Phase 3 — building and deploying web application..."
+
+cd 03-webapp
+
+# Generate config.json loaded at runtime by the SPA
+cat > config.json <<EOF
 {
   "apiKey":      "${FIREBASE_API_KEY}",
   "authDomain":  "${project_id}.firebaseapp.com",
@@ -31,19 +68,14 @@ cat > 02-webapp/config.json << EOF
 }
 EOF
 
-# index.html has no template variables — config is loaded at runtime from config.json.
-echo "NOTE: Generating 02-webapp/index.html..."
-cp 02-webapp/index.html.tmpl 02-webapp/index.html
+# index.html has no template substitutions — Firebase config loads from config.json
+cp index.html.tmpl index.html
 
-# ─── Phase 2: Web Application ────────────────────────────────────────────────
-
-echo "NOTE: Deploying web application..."
-cd 02-webapp
 terraform init -input=false
 terraform apply -auto-approve
 cd ..
 
-# ─── Post-deploy validation ──────────────────────────────────────────────────
-
-echo "NOTE: Running validation..."
+# ==============================================================================
+# Post-deploy summary
+# ==============================================================================
 ./validate.sh
