@@ -14,11 +14,11 @@ echo "--- All composite indexes ---"
 gcloud firestore indexes composite list --project="${PROJECT}"
 
 echo ""
-echo "--- Filtered to cartoonify_jobs ---"
+echo "--- Filtered to cartoonify_jobs (grep on name) ---"
 gcloud firestore indexes composite list \
   --project="${PROJECT}" \
-  --filter="collectionGroup=cartoonify_jobs" \
-  --format="value(name)"
+  --format="value(name)" 2>/dev/null \
+  | grep "cartoonify_jobs" || echo "(none found)"
 
 echo ""
 echo "--- Deleting ---"
@@ -30,16 +30,16 @@ while IFS= read -r idx; do
   echo "Deleted:  ${idx}"
 done < <(gcloud firestore indexes composite list \
   --project="${PROJECT}" \
-  --filter="collectionGroup=cartoonify_jobs" \
-  --format="value(name)" 2>/dev/null)
+  --format="value(name)" 2>/dev/null \
+  | grep "cartoonify_jobs")
 
 echo ""
 echo "--- Polling until gone ---"
 while true; do
   REMAINING=$(gcloud firestore indexes composite list \
     --project="${PROJECT}" \
-    --filter="collectionGroup=cartoonify_jobs" \
-    --format="value(name)" 2>/dev/null || true)
+    --format="value(name)" 2>/dev/null \
+    | grep "cartoonify_jobs" || true)
   echo "Still present: [${REMAINING}]"
   [ -z "${REMAINING}" ] && break
   sleep 5

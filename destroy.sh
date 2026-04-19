@@ -49,8 +49,8 @@ PROJECT=$(jq -r '.project_id' credentials.json)
 echo "NOTE: Deleting Firestore composite indexes..."
 OUR_INDEXES=$(gcloud firestore indexes composite list \
     --project="${PROJECT}" \
-    --filter="collectionGroup=cartoonify_jobs" \
-    --format="value(name)" 2>/dev/null || true)
+    --format="value(name)" 2>/dev/null \
+    | grep "cartoonify_jobs" || true)
 
 for idx in ${OUR_INDEXES}; do
   gcloud firestore indexes composite delete "${idx}" \
@@ -59,12 +59,11 @@ done
 
 if [ -n "${OUR_INDEXES}" ]; then
   echo "NOTE: Waiting for Firestore index deletion to complete..."
-  for idx in ${OUR_INDEXES}; do
-    until ! gcloud firestore indexes composite list \
-        --project="${PROJECT}" \
-        --format="value(name)" 2>/dev/null | grep -qF "${idx}"; do
-      sleep 5
-    done
+  until ! gcloud firestore indexes composite list \
+      --project="${PROJECT}" \
+      --format="value(name)" 2>/dev/null \
+      | grep -q "cartoonify_jobs"; do
+    sleep 5
   done
 fi
 
