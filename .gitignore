@@ -8,4 +8,6 @@
 *.zip
 index.html
 config.json
+credentials.json
+
 
