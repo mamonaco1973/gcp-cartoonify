@@ -38,6 +38,16 @@ if [ -n "${MEDIA_BUCKET}" ]; then
   gcloud storage rm -r "gs://${MEDIA_BUCKET}/**" 2>/dev/null || true
 fi
 
+# Firestore index deletion is async — explicitly purge before terraform destroy
+# to prevent 409 conflicts on the next apply.
+PROJECT=$(jq -r '.project_id' credentials.json)
+echo "NOTE: Deleting Firestore composite indexes..."
+for idx in $(gcloud firestore indexes composite list \
+    --project="${PROJECT}" --format="value(name)" 2>/dev/null); do
+  gcloud firestore indexes composite delete "${idx}" \
+    --project="${PROJECT}" --quiet 2>/dev/null || true
+done
+
 echo "NOTE: Destroying backend resources..."
 cd 01-backend
 terraform destroy -auto-approve
