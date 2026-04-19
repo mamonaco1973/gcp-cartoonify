@@ -42,21 +42,31 @@ if [ -n "${MEDIA_BUCKET}" ]; then
   gcloud storage rm -r "gs://${MEDIA_BUCKET}/**" 2>/dev/null || true
 fi
 
-# Firestore index deletion is async — delete and poll until GCP confirms gone
-# to prevent 409 conflicts on the next apply.
+# Firestore index deletion is async — capture our index names first, delete
+# them, then poll only for those until GCP confirms they are gone.
+# Polling the full list never exits because system indexes always remain.
 PROJECT=$(jq -r '.project_id' credentials.json)
 echo "NOTE: Deleting Firestore composite indexes..."
-for idx in $(gcloud firestore indexes composite list \
-    --project="${PROJECT}" --format="value(name)" 2>/dev/null); do
+OUR_INDEXES=$(gcloud firestore indexes composite list \
+    --project="${PROJECT}" \
+    --filter="collectionGroup=cartoonify_jobs" \
+    --format="value(name)" 2>/dev/null || true)
+
+for idx in ${OUR_INDEXES}; do
   gcloud firestore indexes composite delete "${idx}" \
     --project="${PROJECT}" --quiet 2>/dev/null || true
 done
 
-echo "NOTE: Waiting for Firestore index deletion to complete..."
-until [ -z "$(gcloud firestore indexes composite list \
-    --project="${PROJECT}" --format="value(name)" 2>/dev/null)" ]; do
-  sleep 5
-done
+if [ -n "${OUR_INDEXES}" ]; then
+  echo "NOTE: Waiting for Firestore index deletion to complete..."
+  for idx in ${OUR_INDEXES}; do
+    until ! gcloud firestore indexes composite list \
+        --project="${PROJECT}" \
+        --format="value(name)" 2>/dev/null | grep -qF "${idx}"; do
+      sleep 5
+    done
+  done
+fi
 
 echo "NOTE: Destroying backend resources..."
 cd 01-backend
