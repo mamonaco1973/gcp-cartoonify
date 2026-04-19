@@ -5,7 +5,7 @@
 # For each message:
 #   1. Download the uploaded original image from GCS
 #   2. Normalize: EXIF strip, center-square-crop, resize to 1024×1024 PNG
-#   3. Call Vertex AI Imagen imagegeneration@006 edit_image with the style prompt
+#   3. Call Vertex AI Imagen imagen-3.0-capability-001 edit_image with style prompt
 #   4. Upload the generated cartoon PNG to GCS under cartoons/<owner>/<job_id>.png
 #   5. Update the Firestore job document to status=complete (or status=error)
 #
@@ -34,9 +34,9 @@ from PIL import Image, ImageOps
 
 PROJECT_ID        = os.environ["GOOGLE_CLOUD_PROJECT"]
 MEDIA_BUCKET_NAME = os.environ["MEDIA_BUCKET_NAME"]
+IMAGEN_MODEL_ID   = os.environ["IMAGEN_MODEL_ID"]
 
-TARGET_SIZE    = 1024
-GUIDANCE_SCALE = 70   # 0–100; higher = prompt adherence over image fidelity
+TARGET_SIZE = 1024
 
 # Style prompts. Keys sent by the client; full text stays server-side.
 STYLE_PROMPTS = {
@@ -102,15 +102,14 @@ def _invoke_imagen(prepared_bytes: bytes, style_id: str, prompt_extra: str) -> b
         prompt = f"{prompt}, {prompt_extra}"
 
     vertexai.init(project=PROJECT_ID, location="us-central1")
-    model  = ImageGenerationModel.from_pretrained("imagegeneration@006")
+    model  = ImageGenerationModel.from_pretrained(IMAGEN_MODEL_ID)
     source = VertexImage(image_bytes=prepared_bytes)
 
-    logger.info("Invoking Imagen model=imagegeneration@006 style=%s", style_id)
+    logger.info("Invoking Imagen model=%s style=%s", IMAGEN_MODEL_ID, style_id)
     result = model.edit_image(
         base_image=source,
         prompt=prompt,
         number_of_images=1,
-        guidance_scale=GUIDANCE_SCALE,
     )
 
     if not result.images:

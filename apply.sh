@@ -16,6 +16,8 @@ set -euo pipefail
 # ------------------------------------------------------------------------------
 # Phase 0: Environment validation + API enablement
 # ------------------------------------------------------------------------------
+# shellcheck source=imagen-config.sh
+source "$(dirname "$0")/imagen-config.sh"
 ./check_env.sh
 
 project_id=$(jq -r '.project_id' credentials.json)
@@ -44,7 +46,8 @@ echo "NOTE: Phase 2 — deploying Cloud Functions and API Gateway..."
 cd 02-functions
 terraform init -input=false
 terraform apply -auto-approve \
-  -var="media_bucket_name=${MEDIA_BUCKET}"
+  -var="media_bucket_name=${MEDIA_BUCKET}" \
+  -var="imagen_model_id=${IMAGEN_MODEL_ID}"
 
 GATEWAY_URL=$(terraform output -raw gateway_url)
 cd ..

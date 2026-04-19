@@ -44,6 +44,11 @@ variable "media_bucket_name" {
   type        = string
 }
 
+variable "imagen_model_id" {
+  description = "Vertex AI Imagen model ID for edit_image (from imagen-config.sh)"
+  type        = string
+}
+
 # ================================================================================
 # Data sources — resolve service accounts created in 01-backend
 # ================================================================================

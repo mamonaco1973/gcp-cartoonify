@@ -5,6 +5,9 @@
 
 set -euo pipefail
 
+# shellcheck source=imagen-config.sh
+source "$(dirname "$0")/imagen-config.sh"
+
 # Authenticate so gcloud and Terraform have credentials
 gcloud auth activate-service-account \
   "$(jq -r '.client_email' credentials.json)" \
@@ -27,7 +30,8 @@ cd ..
 echo "NOTE: Destroying Cloud Functions and API Gateway..."
 cd 02-functions
 terraform destroy -auto-approve \
-  -var="media_bucket_name=${MEDIA_BUCKET:-placeholder}" || true
+  -var="media_bucket_name=${MEDIA_BUCKET:-placeholder}" \
+  -var="imagen_model_id=${IMAGEN_MODEL_ID}" || true
 cd ..
 
 # ==============================================================================
