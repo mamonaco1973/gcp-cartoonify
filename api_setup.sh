@@ -54,30 +54,28 @@ gcloud firestore databases create \
 
 echo "NOTE: Creating Firestore composite indexes (idempotent)..."
 
-echo "DEBUG: Listing existing composite indexes before create..."
-gcloud firestore indexes composite list --project="${project_id}"
-
 # history: owner == uid ORDER BY created_at DESC
-echo "DEBUG: Creating history index (owner ASC, created_at DESC)..."
-gcloud firestore indexes composite create \
-  --project="${project_id}" \
-  --collection-group=cartoonify_jobs \
-  --field-config="field-path=owner,order=ascending" \
-  --field-config="field-path=created_at,order=descending" \
-  && echo "DEBUG: history index create command succeeded." \
-  || echo "DEBUG: history index create command failed or already exists (exit $?)."
+if gcloud firestore indexes composite create \
+    --project="${project_id}" \
+    --collection-group=cartoonify_jobs \
+    --field-config="field-path=owner,order=ascending" \
+    --field-config="field-path=created_at,order=descending" \
+    2>/dev/null; then
+  echo "NOTE: history index created."
+else
+  echo "NOTE: history index already exists."
+fi
 
 # quota: owner == uid AND created_at >= today_start
-echo "DEBUG: Creating quota index (owner ASC, created_at ASC)..."
-gcloud firestore indexes composite create \
-  --project="${project_id}" \
-  --collection-group=cartoonify_jobs \
-  --field-config="field-path=owner,order=ascending" \
-  --field-config="field-path=created_at,order=ascending" \
-  && echo "DEBUG: quota index create command succeeded." \
-  || echo "DEBUG: quota index create command failed or already exists (exit $?)."
-
-echo "DEBUG: Listing composite indexes after create..."
-gcloud firestore indexes composite list --project="${project_id}"
+if gcloud firestore indexes composite create \
+    --project="${project_id}" \
+    --collection-group=cartoonify_jobs \
+    --field-config="field-path=owner,order=ascending" \
+    --field-config="field-path=created_at,order=ascending" \
+    2>/dev/null; then
+  echo "NOTE: quota index created."
+else
+  echo "NOTE: quota index already exists."
+fi
 
 echo "NOTE: API setup complete."
