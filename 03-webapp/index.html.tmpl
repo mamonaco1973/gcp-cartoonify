@@ -191,6 +191,9 @@
     <button id="btnSignIn">Sign in</button>
     <button id="btnCreateAccount" class="secondary">Create account</button>
   </div>
+  <div style="margin-top:8px;">
+    <a id="btnForgotPassword" href="#" style="font-size:12px; color:#94a3b8;">Forgot password?</a>
+  </div>
   <div id="loginStatus"></div>
 </div>
 
@@ -264,6 +267,7 @@ import {
   onAuthStateChanged,
   signInWithEmailAndPassword,
   createUserWithEmailAndPassword,
+  sendPasswordResetEmail,
   signOut,
 } from 'https://www.gstatic.com/firebasejs/10.14.1/firebase-auth.js';
 
@@ -353,8 +357,26 @@ async function createAccount() {
   }
 }
 
+async function forgotPassword() {
+  elLoginStatus.textContent = '';
+  const email = elLoginEmail.value.trim();
+  if (!email) { elLoginStatus.textContent = 'Enter your email address first'; return; }
+  setBusy(true);
+  try {
+    await sendPasswordResetEmail(auth, email);
+    elLoginStatus.style.color = '#4ade80';
+    elLoginStatus.textContent = 'Password reset email sent';
+  } catch(e) {
+    elLoginStatus.style.color = '';
+    elLoginStatus.textContent = e.message;
+  } finally {
+    setBusy(false);
+  }
+}
+
 document.getElementById('btnSignIn').addEventListener('click', signIn);
 document.getElementById('btnCreateAccount').addEventListener('click', createAccount);
+document.getElementById('btnForgotPassword').addEventListener('click', e => { e.preventDefault(); forgotPassword(); });
 elLoginPwd.addEventListener('keydown', e => { if (e.key === 'Enter') signIn(); });
 btnSignOut.addEventListener('click', () => signOut(auth));
 
