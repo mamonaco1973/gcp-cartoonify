@@ -70,3 +70,36 @@ fi
 # 400 is acceptable here — it means the model is reachable but rejected the
 # tiny test image (too small for subject detection), which is expected.
 echo "NOTE: Imagen model ${IMAGEN_MODEL_ID} is reachable."
+
+# ------------------------------------------------------------------------------
+# Gemini image generation smoke test — sends a tiny image and expects either
+# a successful response or a 400 (content rejected). Any other error means
+# the model is unavailable or the project lacks access.
+# ------------------------------------------------------------------------------
+echo "NOTE: Testing Gemini model ${GEMINI_MODEL_ID}..."
+GEMINI_RESPONSE=$(curl -s -X POST \
+  -H "Authorization: Bearer ${TOKEN}" \
+  -H "Content-Type: application/json" \
+  -H "x-goog-user-project: ${PROJECT}" \
+  "https://us-central1-aiplatform.googleapis.com/v1/projects/${PROJECT}/locations/us-central1/publishers/google/models/${GEMINI_MODEL_ID}:generateContent" \
+  -d "{
+    \"contents\": [{
+      \"role\": \"user\",
+      \"parts\": [
+        { \"inlineData\": { \"mimeType\": \"image/png\", \"data\": \"${B64}\" } },
+        { \"text\": \"Convert this image to a cartoon style portrait\" }
+      ]
+    }],
+    \"generationConfig\": {
+      \"responseModalities\": [\"IMAGE\", \"TEXT\"]
+    }
+  }")
+
+GEMINI_ERROR_CODE=$(echo "${GEMINI_RESPONSE}" | jq -r '.error.code // empty')
+GEMINI_ERROR_MSG=$(echo "${GEMINI_RESPONSE}" | jq -r '.error.message // empty')
+
+if [ -n "${GEMINI_ERROR_CODE}" ] && [ "${GEMINI_ERROR_CODE}" != "400" ]; then
+  echo "ERROR: Gemini model ${GEMINI_MODEL_ID} unavailable (${GEMINI_ERROR_CODE}): ${GEMINI_ERROR_MSG}"
+  exit 1
+fi
+echo "NOTE: Gemini model ${GEMINI_MODEL_ID} is reachable."
