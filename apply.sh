@@ -47,8 +47,7 @@ cd 02-functions
 terraform init -input=false
 terraform apply -auto-approve \
   -var="media_bucket_name=${MEDIA_BUCKET}" \
-  -var="imagen_model_id=${IMAGEN_MODEL_ID}" \
-  -var="gemini_model_id=${GEMINI_MODEL_ID}"
+  -var="imagen_model_id=${IMAGEN_MODEL_ID}"
 
 GATEWAY_URL=$(terraform output -raw gateway_url)
 cd ..

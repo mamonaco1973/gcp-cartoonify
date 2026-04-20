@@ -74,7 +74,6 @@ resource "google_cloudfunctions2_function" "worker" {
       GOOGLE_CLOUD_PROJECT = local.credentials.project_id
       MEDIA_BUCKET_NAME    = var.media_bucket_name
       IMAGEN_MODEL_ID      = var.imagen_model_id
-      GEMINI_MODEL_ID      = var.gemini_model_id
     }
   }
 

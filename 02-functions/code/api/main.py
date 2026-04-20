@@ -42,7 +42,6 @@ ALLOWED_STYLES = {
     "pixar_3d", "simpsons", "anime",
     "comic_book", "watercolor", "pencil_sketch",
 }
-ALLOWED_MODELS = {"imagen", "gemini"}
 MAX_UPLOAD_BYTES  = 5 * 1024 * 1024
 DAILY_QUOTA       = 10
 JOB_TTL_SECONDS   = 7 * 24 * 3600
@@ -149,15 +148,12 @@ def _handle_submit(request, owner: str):
     job_id       = body.get("job_id")
     key          = body.get("key")
     style        = body.get("style")
-    model        = body.get("model", "imagen")
     prompt_extra = (body.get("prompt_extra") or "").strip()
 
     if not job_id or not key:
         return _json(400, {"error": "Missing job_id or key"})
     if style not in ALLOWED_STYLES:
         return _json(400, {"error": "Unsupported style", "allowed": sorted(ALLOWED_STYLES)})
-    if model not in ALLOWED_MODELS:
-        return _json(400, {"error": "Unsupported model", "allowed": sorted(ALLOWED_MODELS)})
     if len(prompt_extra) > MAX_PROMPT_EXTRA:
         return _json(400, {"error": f"prompt_extra exceeds {MAX_PROMPT_EXTRA} chars"})
 
@@ -188,7 +184,7 @@ def _handle_submit(request, owner: str):
     now = int(time.time())
     doc = {
         "owner": owner, "job_id": job_id, "status": "submitted",
-        "style": style, "model": model, "original_key": key,
+        "style": style, "original_key": key,
         "created_at": now, "ttl": now + JOB_TTL_SECONDS,
     }
     if prompt_extra:
@@ -198,7 +194,7 @@ def _handle_submit(request, owner: str):
     topic_path = _publisher.topic_path(PROJECT_ID, JOBS_TOPIC)
     _publisher.publish(topic_path, json.dumps({
         "job_id": job_id, "owner": owner, "style": style,
-        "model": model, "original_key": key, "prompt_extra": prompt_extra,
+        "original_key": key, "prompt_extra": prompt_extra,
     }).encode("utf-8"))
 
     return _json(202, {"job_id": job_id, "status": "submitted"})

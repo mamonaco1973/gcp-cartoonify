@@ -10,4 +10,3 @@
 # ==============================================================================
 
 export IMAGEN_MODEL_ID="imagen-3.0-capability-001"
-export GEMINI_MODEL_ID="gemini-2.0-flash-preview-image-generation"

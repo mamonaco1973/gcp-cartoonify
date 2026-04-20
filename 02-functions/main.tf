@@ -49,10 +49,6 @@ variable "imagen_model_id" {
   type        = string
 }
 
-variable "gemini_model_id" {
-  description = "Vertex AI Gemini model ID for generateContent (from imagen-config.sh)"
-  type        = string
-}
 
 # ================================================================================
 # Data sources — resolve service accounts created in 01-backend
