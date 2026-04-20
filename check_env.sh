@@ -98,8 +98,13 @@ GEMINI_RESPONSE=$(curl -s -X POST \
 GEMINI_ERROR_CODE=$(echo "${GEMINI_RESPONSE}" | jq -r '.error.code // empty')
 GEMINI_ERROR_MSG=$(echo "${GEMINI_RESPONSE}" | jq -r '.error.message // empty')
 
-if [ -n "${GEMINI_ERROR_CODE}" ] && [ "${GEMINI_ERROR_CODE}" != "400" ]; then
-  echo "ERROR: Gemini model ${GEMINI_MODEL_ID} unavailable (${GEMINI_ERROR_CODE}): ${GEMINI_ERROR_MSG}"
-  exit 1
+if [ -n "${GEMINI_ERROR_CODE}" ]; then
+  # A 400 about image size or content is acceptable — model is reachable and
+  # supports image output. Any other error (404, 403, or capability errors like
+  # "Multi-modal output is not supported") is a real failure.
+  if [ "${GEMINI_ERROR_CODE}" != "400" ] || echo "${GEMINI_ERROR_MSG}" | grep -qi "not supported\|unavailable\|permission\|quota"; then
+    echo "ERROR: Gemini model ${GEMINI_MODEL_ID} check failed (${GEMINI_ERROR_CODE}): ${GEMINI_ERROR_MSG}"
+    exit 1
+  fi
 fi
 echo "NOTE: Gemini model ${GEMINI_MODEL_ID} is reachable."
