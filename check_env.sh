@@ -1,6 +1,9 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+# shellcheck source=imagen-config.sh
+source "$(dirname "$0")/imagen-config.sh"
+
 echo "NOTE: Validating required commands..."
 commands=("gcloud" "terraform" "jq")
 all_found=true
