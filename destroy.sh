@@ -42,6 +42,24 @@ if [ -n "${MEDIA_BUCKET}" ]; then
   gcloud storage rm -r "gs://${MEDIA_BUCKET}/**" 2>/dev/null || true
 fi
 
+echo "NOTE: Deleting all cartoonify_jobs Firestore documents..."
+FS_PROJECT=$(jq -r '.project_id' credentials.json)
+FS_TOKEN=$(gcloud auth print-access-token)
+FS_BASE="https://firestore.googleapis.com/v1/projects/${FS_PROJECT}/databases/(default)/documents"
+
+while true; do
+  DOC_NAMES=$(curl -sf \
+    -H "Authorization: Bearer ${FS_TOKEN}" \
+    "${FS_BASE}/cartoonify_jobs?pageSize=100" \
+    | jq -r '.documents[]?.name // empty' 2>/dev/null || true)
+  [ -z "${DOC_NAMES}" ] && break
+  while IFS= read -r doc; do
+    curl -sf -X DELETE \
+      -H "Authorization: Bearer ${FS_TOKEN}" \
+      "https://firestore.googleapis.com/v1/${doc}" > /dev/null || true
+  done <<< "${DOC_NAMES}"
+done
+
 echo "NOTE: Destroying backend resources..."
 cd 01-backend
 terraform destroy -auto-approve
