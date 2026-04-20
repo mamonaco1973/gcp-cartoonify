@@ -67,29 +67,6 @@ cartoons. GCP handles scaling, availability, and fault tolerance automatically.
 
 ![flow](cartoonify-flow.png)
 
-```
-Browser (SPA on GCS)
-  └── Firebase JS SDK → Identity Platform (email/password) → ID token (JWT)
-
-Browser ──POST /upload-url──→ API Gateway (JWT) → cartoonify_api fn
-                                → V4 signed PUT URL (300s, scoped to owner/job)
-Browser ──PUT (direct)─────→ GCS media bucket (originals/<owner>/<job_id>.<ext>)
-
-Browser ──POST /generate───→ API Gateway (JWT) → cartoonify_api fn
-                                → Firestore (status=submitted)
-                                → Pub/Sub cartoonify-jobs
-                                       ↓ Eventarc trigger
-                             cartoonify-worker fn
-                             • Pillow: EXIF strip, center-square-crop, 1024×1024
-                             • Vertex AI Imagen edit_image (REFERENCE_TYPE_SUBJECT)
-                             • GCS put cartoons/<owner>/<job_id>.png
-                             • Firestore (status=complete)
-
-Browser ──GET /result/{id}──→ cartoonify_api fn → job status + signed GET URLs
-Browser ──GET /history──────→ cartoonify_api fn → newest 50 jobs for owner
-Browser ──DELETE /history/{id}→ cartoonify_api fn → removes GCS objects + Firestore doc
-```
-
 ## Prerequisites
 
 * [A Google Cloud Platform account](https://console.cloud.google.com/)
