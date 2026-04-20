@@ -229,6 +229,12 @@
       <option value="pencil_sketch">Pencil Sketch</option>
     </select>
 
+    <label for="modelSelect">AI Model</label>
+    <select id="modelSelect">
+      <option value="imagen">Imagen (Vertex AI)</option>
+      <option value="gemini">Gemini (Vertex AI)</option>
+    </select>
+
     <label for="promptExtra">Extra instructions (optional, max 500 chars)</label>
     <textarea id="promptExtra" maxlength="500" rows="3"
               placeholder="e.g. wearing a red hat, smiling, standing in a forest"></textarea>
@@ -306,6 +312,7 @@ const btnSignOut     = document.getElementById('btnSignOut');
 const btnSubmit      = document.getElementById('btnSubmit');
 const fileInput      = document.getElementById('fileInput');
 const styleSelect    = document.getElementById('styleSelect');
+const modelSelect    = document.getElementById('modelSelect');
 const promptExtra    = document.getElementById('promptExtra');
 const busyOverlay    = document.getElementById('busyOverlay');
 
@@ -439,6 +446,7 @@ function validateFile(file) {
 async function submitJob() {
   const file  = fileInput.files[0];
   const style = styleSelect.value;
+  const model = modelSelect.value;
   const extra = (promptExtra.value || '').trim();
 
   try { await validateFile(file); }
@@ -468,6 +476,7 @@ async function submitJob() {
       job_id:       presign.job_id,
       key:          presign.key,
       style,
+      model,
       prompt_extra: extra,
     });
 

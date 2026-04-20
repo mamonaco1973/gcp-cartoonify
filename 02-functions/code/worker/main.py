@@ -26,16 +26,20 @@ import logging
 import os
 import time
 
+import base64
+
 import vertexai
 from vertexai.preview.vision_models import ImageGenerationModel
 from vertexai.preview.vision_models import Image as VertexImage
 from vertexai.preview.vision_models import SubjectReferenceImage
+from vertexai.generative_models import GenerativeModel, Part, GenerationConfig
 from google.cloud import firestore, storage
 from PIL import Image, ImageOps
 
 PROJECT_ID        = os.environ["GOOGLE_CLOUD_PROJECT"]
 MEDIA_BUCKET_NAME = os.environ["MEDIA_BUCKET_NAME"]
 IMAGEN_MODEL_ID   = os.environ["IMAGEN_MODEL_ID"]
+GEMINI_MODEL_ID   = os.environ["GEMINI_MODEL_ID"]
 
 TARGET_SIZE = 1024
 
@@ -125,15 +129,43 @@ def _invoke_imagen(prepared_bytes: bytes, style_id: str, prompt_extra: str) -> b
     return result.images[0]._image_bytes
 
 
+def _invoke_gemini(prepared_bytes: bytes, style_id: str, prompt_extra: str) -> bytes:
+    """Call Gemini generateContent with image input and return generated PNG bytes."""
+    prompt = STYLE_PROMPTS.get(style_id)
+    if not prompt:
+        raise ValueError(f"Unknown style: {style_id!r}")
+    if prompt_extra:
+        prompt = f"{prompt}, {prompt_extra}"
+
+    vertexai.init(project=PROJECT_ID, location="us-central1")
+    model = GenerativeModel(GEMINI_MODEL_ID)
+
+    logger.info("Invoking Gemini model=%s style=%s", GEMINI_MODEL_ID, style_id)
+    response = model.generate_content(
+        [
+            Part.from_data(prepared_bytes, mime_type="image/png"),
+            prompt,
+        ],
+        generation_config=GenerationConfig(response_modalities=["IMAGE", "TEXT"]),
+    )
+
+    for part in response.candidates[0].content.parts:
+        if part.inline_data and part.inline_data.mime_type.startswith("image/"):
+            return base64.b64decode(part.inline_data.data)
+
+    raise RuntimeError("Gemini returned no image in response")
+
+
 def _process_message(msg: dict) -> None:
     job_id       = msg["job_id"]
     owner        = msg["owner"]
     style        = msg["style"]
+    model        = msg.get("model", "imagen")
     original_key = msg["original_key"]
     prompt_extra = msg.get("prompt_extra") or ""
 
-    logger.info("Processing job=%s owner=%s style=%s key=%s",
-                job_id, owner, style, original_key)
+    logger.info("Processing job=%s owner=%s style=%s model=%s key=%s",
+                job_id, owner, style, model, original_key)
 
     doc_ref = _db.collection("cartoonify_jobs").document(job_id)
     doc_ref.update({"status": "processing"})
@@ -146,8 +178,11 @@ def _process_message(msg: dict) -> None:
     # 2. Normalize image
     prepared_bytes = _prepare_image(src_bytes)
 
-    # 3. Generate cartoon via Vertex AI Imagen
-    cartoon_bytes = _invoke_imagen(prepared_bytes, style, prompt_extra)
+    # 3. Generate cartoon via selected model
+    if model == "gemini":
+        cartoon_bytes = _invoke_gemini(prepared_bytes, style, prompt_extra)
+    else:
+        cartoon_bytes = _invoke_imagen(prepared_bytes, style, prompt_extra)
 
     # 4. Upload cartoon to GCS
     cartoon_key = f"cartoons/{owner}/{job_id}.png"

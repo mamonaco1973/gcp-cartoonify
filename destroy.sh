@@ -31,7 +31,8 @@ echo "NOTE: Destroying Cloud Functions and API Gateway..."
 cd 02-functions
 terraform destroy -auto-approve \
   -var="media_bucket_name=${MEDIA_BUCKET:-placeholder}" \
-  -var="imagen_model_id=${IMAGEN_MODEL_ID}" || true
+  -var="imagen_model_id=${IMAGEN_MODEL_ID}" \
+  -var="gemini_model_id=${GEMINI_MODEL_ID}" || true
 cd ..
 
 # ==============================================================================
