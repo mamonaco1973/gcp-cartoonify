@@ -65,6 +65,8 @@ cartoons. GCP handles scaling, availability, and fault tolerance automatically.
 
 ## Workflow
 
+![flow](cartoonify-flow.png)
+
 ```
 Browser (SPA on GCS)
   └── Firebase JS SDK → Identity Platform (email/password) → ID token (JWT)
