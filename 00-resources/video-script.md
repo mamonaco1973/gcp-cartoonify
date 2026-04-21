@@ -4,47 +4,63 @@
 
 ## Introduction
 
-[ Show web application log in ]
+[ Opening Sequence ]
 
-Do you need a secure, serverless API on Google Cloud?
+“Do you want to build an AI-powered image pipeline on Google Cloud?”
 
-[ Architecture diagram — walk through it left to right: browser, Cloud Storage, Cloud Function, Firestore ]
+[ Show Diagram ]
 
-In this project, we build a secure notes API using Cloud Functions, Firestore, API Gateway, and Google's Identity Platform.
+"In this project, we build a fully serverless pipeline that turns photos into cartoons using Google Cloud and Vertex."
 
-[Terminal running apply.sh — Terraform output flying by, ending with the website URL ]
+[ Build B Roll ]
 
-Follow along and in minutes you'll have a secured serverless API running in Google Cloud.
+Follow along and in minutes you’ll have a fully working AI pipeline running on Google Cloud.
 
 ---
-
-## Architecture
 
 [ Full diagram ]
 
 "Let's walk through the architecture before we build."
 
-[ Highlight Browser + Identity Platform ]
+[ Diagram then Congito ]
 
-“The user signs in with Identity Platform, and the browser receives a bearer token for API calls”
+"First, the user signs into the web application using Google's Identity Platform.
 
-[ Highlight Browser to Gateway ]
+[ Choose File then Diagam ]
 
-“That token goes with each call to the API Gateway.”
+"When the user selects “Choose File”, the image is uploaded to the media bucket."
 
-[ Highlight Gateway ]
+[  Cartoonify ]
 
-“The gateway validates the token before calling the Cloud Functions.
+When the user selects “Cartoonify”, the API does two things:
 
-[ Highlight Cloud Function ]
+[ Highlight Firebase]
 
-“The Cloud Functions are the API compute layer and are implemented in Python.
+It creates a job record in Firebase.
 
+[ Highlight Pub/Sub queue ]
 
-[ Highlight Firestore ]
+Then it sends a message to the image processing Pub-Sub topic.
 
-"Firestore stores the notes data, isolated per user.”
+[ Highlight Lambda ]
 
+"Pub-Sub triggers the worker cloud function."
+
+[ Show bedrock ]
+
+"The worker calls Vertex to generate the cartoon."
+
+[ Show S3 Media Bucket]
+
+"The generated image is written back to media bucket.
+
+[ Final Firebase State]
+
+When processing completes, the job status is updated in Firebase.
+
+[ Show final result ]
+
+The web application refreshes and displays the generated image.
 ---
 
 ## Build the Code
@@ -122,48 +138,18 @@ Firestore stores the notes, scoped to the authenticated user by the owner field
 
 ## Demo
 
-[ Browser — Notes Demo, open DevTools → Network tab ]
+Navigate to the web application URL
 
-"When the application loads we are prompted to login."
+Sign in using the Identity Platform.
 
-[ Sign In ]
+Select “Choose File” and upload a test image.
 
-Sign in with an existing account — or create one here.
+Select the “Pixar 3D” style, then click “Cartoonify” to start the image generation pipeline.
 
-[ Show redirect link ]
+The application displays the image generation lifecycle in the left hand panel.
 
-The Identity Platform re-directs back to callback.html. The page exchanges the authorization code for tokens.
+When processing completes, the application refreshes and shows the result.
 
-[ Show initial state ]
+Now try some different styles.
 
-We're now authenticated into the app. Open the browser debugger so we can watch the API calls.
-
-[  Create a new note ]
-
-Create a new note.
-
-[ Show create API call with bearer token ]
-
-"A POST is made with the JWT as a Bearer token."
-
-[ Editing and clicking Save ]
-
-"Now update the note."
-
-[ Show network tab ]
-
-"The PUT call is made with the Bearer token set."
-
-[ Delete prompt ]
-
-"Delete the Note".
-
-[ Show network tab ]
-
-'The DELETE call is made with the Bearer token set."
-
-[ Browser — empty list ]
-
-"In this demo we've exercised every API endpoint — all secured with JWT bearer tokens."
-
----
+The application displays a gallery of your previous results.

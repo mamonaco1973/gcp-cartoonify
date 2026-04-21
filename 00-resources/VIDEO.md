@@ -1,37 +1,40 @@
-#GCP #Serverless #CloudFunctions #Firestore #Terraform #Python #IdentityPlatform #APIGateway
+#GCP #Serverless #CloudFunctions #VertexAI #PubSub #Firestore #APIGateway #IdentityPlatform #Terraform #Python #GenerativeAI
 
-*Secure Serverless API on Google Cloud (Identity Platform + API Gateway)*
+*Build an AI Image Pipeline on GCP (Vertex + Cloud Functions + Pub/Sub)*
 
-Deploy a fully authenticated serverless notes API on Google Cloud Platform using Terraform, Cloud Functions 2nd Gen, Firestore, and Cloud API Gateway. Users sign in via Identity Platform (Firebase Auth), and every API request is validated against a Firebase JWT before reaching the Cloud Function — with data scoped per user at the Firestore layer.
+Turn any photo into a cartoon using a fully serverless, event-driven pipeline on GCP — provisioned with Terraform and deployed with a single script. Users sign in with Firebase email/password (Identity Platform), upload a photo, pick a cartoon style, and a Pub/Sub-driven worker invokes Vertex AI Imagen with subject-reference prompting to generate a stylized portrait. Originals and cartoons are stored privately in GCS and served through short-lived V4 signed URLs.
 
-In this project we build a secure REST API with full Create, Read, Update, and Delete support — protected by real JWT authentication, deployed with a single script, and tested through a browser-based SPA with no server to manage.
+In this project we build an asynchronous AI image-processing pipeline from scratch — the browser uploads directly to GCS via a V4 signed PUT URL, Pub/Sub decouples the slow Imagen inference call from the API response, and a Cloud Function running Pillow normalizes the photo before sending it to Vertex AI. The whole thing runs without a single VM.
 
 WHAT YOU'LL LEARN
-• Enabling GCP Identity Platform and configuring email/password sign-in via the REST API
-• Issuing browser API keys scoped to identitytoolkit.googleapis.com with google_apikeys_key
-• Defining a Cloud API Gateway with an OpenAPI spec that validates Firebase JWT tokens
-• Forwarding decoded JWT claims to a private Cloud Function via X-Apigateway-Api-Userinfo
-• Scoping Firestore reads and writes to the authenticated user's UID (sub claim)
-• Hosting a static SPA on a public GCS bucket with runtime config loaded from config.json
+• Invoking Vertex AI Imagen (imagen-3.0-capability-001) with SubjectReferenceImage for person likeness preservation
+• Using Pub/Sub + Eventarc to decouple a slow AI inference call from a synchronous API response
+• Consolidating multiple API routes into a single Cloud Function with internal path routing
+• Implementing Firebase email/password auth (Identity Platform) in a static SPA
+• Attaching a JWT authorizer to API Gateway (validating Firebase ID tokens)
+• Generating V4 signed PUT URLs for direct browser-to-GCS upload
+• Enforcing per-user daily quotas with a Firestore range query
+• Managing Firestore composite indexes outside Terraform to avoid async lifecycle conflicts
 
 INFRASTRUCTURE DEPLOYED
-• Cloud Function (2nd Gen, Python 3.11, HTTP trigger, private — invoked only by gateway SA)
-• Cloud API Gateway with OpenAPI 2.0 spec (Firebase JWT securityDefinitions)
-• Identity Platform (email/password sign-in, Firebase JS SDK)
-• GCS bucket for function source code (zip archive, content-addressed)
-• Firestore database (Native mode, us-central1)
-• Service accounts: notes-sa (Firestore), notes-gateway-sa (Cloud Run invoker)
-• GCS bucket hosting a static web frontend
+• Identity Platform (Firebase Auth) with email/password sign-in
+• API Gateway with Firebase JWT authorizer (validates against Identity Platform JWKS)
+• Single zip-packaged API Cloud Function (Python 3.12): upload-url, generate, result, history, delete
+• Worker Cloud Function (512 MB, 300 s timeout) triggered by Pub/Sub via Eventarc
+• Pub/Sub topic (cartoonify-jobs) with dead-letter policy
+• Firestore (Native mode) with composite indexes for history and quota queries
+• GCS web bucket (public SPA hosting) + GCS media bucket (private, 7-day lifecycle)
+• IAM service accounts scoped per function — API role cannot invoke Vertex AI; worker role cannot delete
 
 GitHub
-https://github.com/mamonaco1973/gcp-identity-app
+https://github.com/mamonaco1973/gcp-cartoonify
 
 README
-https://github.com/mamonaco1973/gcp-identity-app/blob/main/README.md
+https://github.com/mamonaco1973/gcp-cartoonify/blob/main/README.md
 
 TIMESTAMPS
 00:00 Introduction
-00:15 Architecture
-00:40 Build the Code
-00:56 Build Results
-01:39 Demo
+00:14 Architecture
+00:49 Build the Code
+01:04 Build Results
+01:48 Demo
