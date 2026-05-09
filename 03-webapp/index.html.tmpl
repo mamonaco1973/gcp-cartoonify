@@ -324,6 +324,13 @@ onAuthStateChanged(auth, user => {
     cartoonifyApp.style.display = 'none';
     elUserEmail.textContent     = '';
     stopGalleryRefresh();
+    stopPoll();
+    document.getElementById('gallery').innerHTML    = '';
+    document.getElementById('currentJob').style.display = 'none';
+    fileInput.value = '';
+    setSubmitStatus('');
+    setGalleryStatus('');
+    updateSubmitButton();
   }
 });
 
